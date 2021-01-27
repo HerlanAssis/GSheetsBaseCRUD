@@ -335,7 +335,7 @@ As próximas ações para o GSheetsBaseCRUD são:
 * [ ] Documentar Classes, métodos e funções utilizadas
 * [ ] Escrever Testes
 
-## Contribuindo para <nome_projeto>
+## Contribuindo para GSheetsBaseCRUD
 
 Para contribuir com GSheetsBaseCRUD, siga estes passos:
 
