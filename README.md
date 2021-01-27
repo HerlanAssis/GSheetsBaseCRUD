@@ -39,8 +39,8 @@ Para instalar o GSheetsBaseCRUD, siga estes passos:
 
 ** É de extrema importância que tudo seja executado na ordem!
 
-1. Copie e cole todo o conteúdo do arquivo (base.js)[./base.js];
-2. Habilite às triggers/acionadores do (Google Sheets)[https://developers.google.com/apps-script/guides/triggers/installable#managing_triggers_manually];
+1. Copie e cole todo o conteúdo do arquivo [base.js](./base.js);
+2. Habilite às triggers/acionadores do [Google Sheets](https://developers.google.com/apps-script/guides/triggers/installable#managing_triggers_manually);
 
 ## Utilizando GSheetsBaseCRUD
 
