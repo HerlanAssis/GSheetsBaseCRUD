@@ -67,18 +67,21 @@ class GenericModel {
 
     if(!sheet){
       throw new Error("Planilha não pode ser nula!");
-    }
+    }  
+
+    this.data_range.col_end = this.sheet.getMaxColumns()
+    this.data_range.row_end = this.sheet.getMaxRows()
   }
 
   _getColumnRangeId(){
-    return `${this.column_id}${this.data_range.start}:${this.column_id}`   
+    return `${this.column_id}${this.data_range.row_start}:${this.column_id}`   
   }
 
   _getNextId(){
     const STRATEGY_ID_GENERATION = {
       'incremental': ()=> {    
         const column = this._getColumnRangeId()
-        let lastID = `${this.column_id}${this.data_range.start}:${this.column_id}${getNumberLastRowInUse(this.sheet, column)}`
+        let lastID = `${this.column_id}${this.data_range.row_start}:${this.column_id}${getNumberLastRowInUse(this.sheet, column)}`
         return this.sheet.getRange(lastID).getValue()+1
       },
       'temporal': ()=> {
@@ -95,9 +98,7 @@ class GenericModel {
     return STRATEGY_ID_GENERATION[this.strategy_id]()
   }
 
-  _getRowNumberById(id){    
-    // TODO fazer a busca de acordo com a estratégia de geração de ID
-
+  _getRowNumberById(id){
     const column_range_id = this._getColumnRangeId()        
 
     const id_array = this.sheet.getRange(column_range_id).getValues().map(item => item[0]).filter(item => item !=="")
@@ -107,7 +108,7 @@ class GenericModel {
 
     if(rowNumber === -1) throw new Error("ID não existe!")
 
-    return rowNumber + this.data_range.start
+    return rowNumber + this.data_range.row_start
   }
 
   _getNextRowToInsert(){
@@ -118,9 +119,21 @@ class GenericModel {
 }
 
 GenericModel.prototype.strategy_id = 'temporal'
-GenericModel.prototype.data_range = {start: 2, end:  Number.MAX_SAFE_INTEGER}
+GenericModel.prototype.data_range = {row_start: 2, row_end: -1, col_start: 1, col_end: -1}
 GenericModel.prototype.column_id = 'A'
 GenericModel.prototype.columns = []
+GenericModel.prototype.triggers = []
+
+//https://stackoverflow.com/questions/39435392/cant-get-getactivesheet-from-undefined
+//https://developers.google.com/apps-script/guides/triggers/installable#managing_triggers_manually
+GenericModel.prototype.runTriggers = function(e){
+  const me = this;
+  const src = e.source;
+  //const activeSheet = src.getActiveSheet();
+  //const activeRange = src.getActiveRange();
+
+  me.triggers.forEach(trigger => trigger(me, src))
+}
 
 
 class Model extends GenericModel {  
@@ -196,13 +209,14 @@ class Model extends GenericModel {
       
       // writable validator
       if(!col.writable && params[col.name]){
-        throw new ValidationError(col.name, 'Campo não pode ser escrito!')
+        delete params[col.name]
+        //throw new ValidationError(col.name, 'Campo não pode ser escrito!')
       }
 
       // unique validator
       if(col.unique && col.required){
 
-        const allValues = getColumnDataAsList(this.sheet, `${col.col}${this.data_range.start}:${col.col}`)
+        const allValues = getColumnDataAsList(this.sheet, `${col.col}${this.data_range.row_start}:${col.col}`)
 
         if(!allValues.every(item => item !== params[col.name])) throw new ValidationError(col.name, 'Campo deve ser único!');
       }
@@ -221,7 +235,7 @@ class Model extends GenericModel {
   _insert(params, isCreate = false){    
     let row = this._getNextRowToInsert()    
     
-    if ('id' in params){      
+    if ('id' in params && params['id']){      
       row = this._getRowNumberById(params.id)
     }else{
       params['id'] = this._getNextId()
@@ -245,16 +259,38 @@ class Model extends GenericModel {
   }
 
   list(params = {}){
-    // TODO, make list filter for all unique filds
-
     let result = [[]]
 
     if('id' in params) {
       const rowNumber = this._getRowNumberById(params.id)
-      let range = `A${rowNumber}:${getCharFromNumber(this.sheet.getMaxColumns())}${rowNumber}`
+      let range = `A${rowNumber}:${getCharFromNumber(this.data_range.col_end)}${rowNumber}`
       result = this.sheet.getRange(range).getValues()
+    }else if('conditional' in params && Object.keys(params).length > 1){
+      const {conditional, ...filters} = params      
+
+      result = this.sheet.getRange(this.data_range.row_start, 1, this.data_range.row_end, this.data_range.col_end).getValues();
+      let mappedArr = [
+        /*{
+          key:'',
+          value:'',
+          position:0
+        }*/
+      ]
+
+      mappedArr = Object.entries(filters).map(([key, value]) => {
+        //array stats at 0
+        return {key, value, position: getColumnNrByName(this.sheet, this.getColumn(key).col)-1}
+      })
+
+      result = result.filter(row => {                                
+        if(conditional.toLowerCase()==='or'){
+          return mappedArr.some(testable => row[testable.position] == testable.value)
+        }else{ //and
+          return mappedArr.every(testable => row[testable.position] == testable.value)
+        }        
+      })      
     }else{
-      result = this.sheet.getRange(this.data_range.start, 1, this.sheet.getMaxRows(), this.sheet.getMaxColumns()).getValues();
+      result = this.sheet.getRange(this.data_range.row_start, 1, this.data_range.row_end, this.data_range.col_end).getValues();
     }
 
     return result
@@ -271,7 +307,7 @@ class Model extends GenericModel {
     if(!('id' in params)) throw new Error("ID não pode ser nulo!");
     const rowPosition = this._getRowNumberById(params.id);
 
-    const range = `A${rowPosition}:${getCharFromNumber(this.sheet.getMaxColumns())}${rowPosition}`
+    const range = `A${rowPosition}:${getCharFromNumber(this.data_range.col_end)}${rowPosition}`
 
     const popValue = this.sheet.getRange(range).getValues()
     this.sheet.deleteRow(rowPosition)
@@ -297,6 +333,34 @@ const NotEmptyValidator = {
 }
 /** VALIDATIONS */
 
+/** TRIGGERS */
+
+/*Example = async function(me, src){        
+  // if conditions are true
+  if(true){    
+    // do something
+    // model.create , insert, update, remove, ....    
+  }
+}*/
+
+AddIdIfNotExist = async function(me, src){    
+  const activeRange = src.getActiveRange();
+  const activeRow = activeRange.getRowIndex()
+  const idColNumber = getColumnNrByName(me.sheet, me.column_id)
+  
+  const hasId = me.sheet.getRange(activeRow, idColNumber).getValue().trim() !== ""
+
+  if(!hasId){
+    await me.sheet.getRange(activeRow, idColNumber).setValue(me._getNextId());
+  }    
+}
+
+OrderById = async function(me, src){
+  const range = me.sheet.getRange(`A${me.data_range.row_start}:${me.column_id}`);
+  await range.sort({column: getColumnNrByName(me.sheet, me.column_id), ascending: true});    
+}
+/** TRIGGERS */
+
 /** Controller */
 class Controller {
   constructor(model){
@@ -311,7 +375,7 @@ class Controller {
     const rows = []
 
     arr.forEach((r, rowNumber) => {
-      let rN = rowNumber + this.model.data_range.start
+      let rN = rowNumber + this.model.data_range.row_start
       rows[rN] = {}
       r.forEach((col, colNumber) => {
          rows[rN][getCharFromNumber(colNumber+1)] = col
@@ -321,11 +385,16 @@ class Controller {
     return rows
   }
 
-  _testMappedCols(params){
+  _testMappedCols(params, hasFilter = false){
     const columns = this.model.getColumns()    
     // valid id params is a mapped col
     Object.keys(params).forEach(item => {
-      if(!columns.find(colCell => colCell.name.toLowerCase() === item.toLowerCase())) throw new ValidationError(item, "Não foi mapeado")
+      if(!columns.find(colCell => colCell.name.toLowerCase() === item.toLowerCase())) {
+        // if has filter and is item param is 'conditional' jump throw error
+        if(!(hasFilter && item.toLowerCase() === 'conditional')){
+          throw new ValidationError(item, "Não foi mapeado")
+        }
+      }
     })
   }
 
@@ -334,9 +403,21 @@ class Controller {
 
     this.model.create(params)
   }
+  
+  filterOR(params={}){
+    params['conditional'] = 'or'
+    return this.list(params)
+  }
+  filterAND(params={}){
+    params['conditional'] = 'and'
+    
+    return this.list(params)
+  }  
 
   list(params={}){
-    this._testMappedCols(params)
+    let hasFilter = 'conditional' in params
+  
+    this._testMappedCols(params, hasFilter)
 
     return this._convertArrayRowToColumnData(this.model.list(params))
   }
@@ -366,26 +447,63 @@ class API {
   }
   
   create(params={}) {  
+    return new Promise((resolve, reject) => {      
+      try{        
+        resolve(this._controller.create(params))
+      }catch(e){
+        reject(e)
+      }
+    })
+  }
+
+  
+  filterOR(params={}){
     return new Promise((resolve, reject) => {
-      resolve(this._controller.create(params))
+      try{        
+        resolve(this._controller.filterOR(params))
+      }catch(e){
+        reject(e)
+      }
+    })
+  }
+
+  filterAND(params={}){
+    return new Promise((resolve, reject) => {
+      try{        
+        resolve(this._controller.filterAND(params))
+      }catch(e){
+        reject(e)
+      }
     })
   }
 
   list(params={}){
     return new Promise((resolve, reject) => {
-      resolve(this._controller.list(params))
+      try{        
+        resolve(this._controller.list(params))
+      }catch(e){
+        reject(e)
+      }
     })
   }
 
   update(params={}){
     return new Promise((resolve, reject) => {
-      resolve(this._controller.update(params))
+      try{        
+        resolve(this._controller.update(params))
+      }catch(e){
+        reject(e)
+      }
     });
   }
 
   remove(params={}){
     return new Promise((resolve, reject) => {
-      resolve(this._controller.remove(params))
+      try{        
+        resolve(this._controller.remove(params))
+      }catch(e){
+        reject(e)
+      }
     });
   }
 }
