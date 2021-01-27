@@ -32,6 +32,7 @@ Resultado após salvar o formulário
 Antes de começar, verifique se você atendeu aos seguintes requisitos:
 
 * Habilite o Google App Script dentro de uma planilha do Google;
+* Habilite a execução de scripts para o seu projeto;
 
 ## Instalando GSheetsBaseCRUD
 Para instalar o GSheetsBaseCRUD, siga estes passos:
