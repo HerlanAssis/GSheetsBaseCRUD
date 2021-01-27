@@ -20,10 +20,12 @@ GSheetsBaseCRUD é uma `ferramenta/biblioteca` que permite `emular um banco de d
 Nesse projeto utilizei como exemplo uma aplicação Vue.jS via CDN para mostarar o potencial dessa ferramenta.
 
 ## Capturas de tela
+
 Página web
 ![html crud](00.PNG "CRUD")
 
 Resultado após salvar o formulário
+
 ![planilha](01.PNG "Planilha")
 
 ## Pré-requisitos
