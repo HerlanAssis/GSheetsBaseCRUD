@@ -263,7 +263,7 @@ class Model extends GenericModel {
 
     if('id' in params) {
       const rowNumber = this._getRowNumberById(params.id)
-      let range = `A${rowNumber}:${getCharFromNumber(this.data_range.col_end)}${rowNumber}`
+      let range = `${getCharFromNumber(this.data_range.row_start)}${rowNumber}:${getCharFromNumber(this.data_range.col_end)}${rowNumber}`
       result = this.sheet.getRange(range).getValues()
     }else if('conditional' in params && Object.keys(params).length > 1){
       const {conditional, ...filters} = params      
@@ -307,7 +307,7 @@ class Model extends GenericModel {
     if(!('id' in params)) throw new Error("ID não pode ser nulo!");
     const rowPosition = this._getRowNumberById(params.id);
 
-    const range = `A${rowPosition}:${getCharFromNumber(this.data_range.col_end)}${rowPosition}`
+    const range = `${getCharFromNumber(this.data_range.row_start)}${rowPosition}:${getCharFromNumber(this.data_range.col_end)}${rowPosition}`
 
     const popValue = this.sheet.getRange(range).getValues()
     this.sheet.deleteRow(rowPosition)
@@ -356,7 +356,7 @@ AddIdIfNotExist = async function(me, src){
 }
 
 OrderById = async function(me, src){
-  const range = me.sheet.getRange(`A${me.data_range.row_start}:${me.column_id}`);
+  const range = me.sheet.getRange(`${getCharFromNumber(this.data_range.row_start)}${me.data_range.row_start}:${me.column_id}`);
   await range.sort({column: getColumnNrByName(me.sheet, me.column_id), ascending: true});    
 }
 /** TRIGGERS */
