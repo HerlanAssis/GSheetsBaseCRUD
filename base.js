@@ -8,12 +8,20 @@ function getSheetBy(url, name) {
 	return SpreadsheetApp.openByUrl(url).getSheetByName(name);
 }
 
+function getListasBy(sheetName, range) {	
+  return new Promise(resolve => {
+    let planilha = getSheetBy(SHEET_URL, sheetName);
+    let list = planilha.getRange(range).getValues();
+    resolve(list.filter((r) => r[0] !== "").map(item => item[0]))
+  })  
+}
+
 function getTypeAndSubtype(sheet, range, type = null) {  
   let interval = sheet.getRange(range).getValues();
   let data = {}
 
   interval.forEach(cell => {
-    if(!(cell[0] in tipos)){
+    if(!(cell[0] in data)){
       data[cell[0]] = []  
     }
     data[cell[0]].push(cell[1])
@@ -170,7 +178,11 @@ class Model extends GenericModel {
   }
 
   getColumn(name){
-    return this.getColumns().find(item => item.name.toLowerCase() === name.toLowerCase())
+    const testKeyAndName = (item, name) => {
+      return item.name.toLowerCase() === name.toLowerCase() || item.col.toLowerCase() === name.toLowerCase()
+    }  
+
+    return this.getColumns().find(item => testKeyAndName(item, name))
   }
 
   _validate(params, isCreate = false){     
@@ -285,13 +297,18 @@ class Model extends GenericModel {
       result = result.filter(row => {                                
         if(conditional.toLowerCase()==='or'){
           return mappedArr.some(testable => row[testable.position] == testable.value)
-        }else{ //and
+        }else{ //and        
           return mappedArr.every(testable => row[testable.position] == testable.value)
         }        
       })      
     }else{
       result = this.sheet.getRange(this.data_range.row_start, 1, this.data_range.row_end, this.data_range.col_end).getValues();
     }
+
+  const column_id_number = getColumnNrByName(this.sheet, this.column_id) -1
+
+    // get only rows if ID
+    result = result.filter(row => row[column_id_number] !== "")
 
     return result
 
@@ -377,8 +394,14 @@ class Controller {
     arr.forEach((r, rowNumber) => {
       let rN = rowNumber + this.model.data_range.row_start
       rows[rN] = {}
+
       r.forEach((col, colNumber) => {
-         rows[rN][getCharFromNumber(colNumber+1)] = col
+      
+      try{
+        let charFromColNumber = getCharFromNumber(colNumber+1)
+        let colName = this.model.getColumn(charFromColNumber).name
+        rows[rN][colName] = col
+      }catch(e){}
       })
     })
 
